@@ -2,3 +2,5 @@
 node_modules/
 dist/
 keys
+postgres/
+/src/generated/prisma

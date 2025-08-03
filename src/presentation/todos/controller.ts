@@ -1,81 +1,105 @@
 import { Request, Response } from 'express'
-
-const todos = [
-    {
-        id: 1,
-        title: "Todo 1",
-        description: "Description 1",
-        done: false
-    },
-    {
-        id: 2,
-        title: "Todo 2",
-        description: "Description 2",
-        done: false
-    },
-    {
-        id: 3,
-        title: "Todo 3",
-        description: "Description 3",
-        done: false
-    }
-]
+import { prisma } from '../../config/data/postgres';
+import { CreateTodoDto, UpdateTodoDto, GetTodosDto, GetTodoByIdDto, DeleteTodoDto } from '../../domain/dtos/todos';
+import { title } from 'process';
 
 export class TodoController {
 
     constructor() {}
     
-    public getTodos(req: Request, res: Response) {
+    public async getTodos(req: Request, res: Response) {
+        const [error, getTodosDto] = GetTodosDto.create({
+            page: req.query.page,
+            limit: req.query.limit,
+            completed: req.query.completed === 'true' ? true : req.query.completed === 'false' ? false : undefined
+        });
+        
+        if (error) {
+            return res.status(400).json({ message: error });
+        }
+
+        const todos = await prisma.todo.findMany(getTodosDto!.toObject());
         return res.json(todos);
     }
 
-    public getTodoById(req: Request, res: Response) {
-        const id = parseInt(req.params.id);
-        const todo = todos.find(todo => todo.id === id);
+    public async getTodoById(req: Request, res: Response) {
+        const [error, getTodoByIdDto] = GetTodoByIdDto.create({ id: req.params.id });
+        
+        if (error) {
+            return res.status(400).json({ message: error });
+        }
+        
+        const todo = await prisma.todo.findUnique({
+            where: {
+                id: getTodoByIdDto!.getId()
+            }
+        })
         if (!todo) {
             return res.status(404).json({ message: "Todo not found" });
         }
         return res.json(todo);
     }
 
-    public createTodo(req: Request, res: Response) {
-        const { title, description, done } = req.body;
-        if (!title || !description || !done) {
-            return res.status(400).json({ message: "Missing required fields" });
+    public async createTodo(req: Request, res: Response) {
+        const { title } = req.body;
+        const [error, createTodoDto] = CreateTodoDto.create({ title });
+        if (error) {
+            return res.status(400).json({ message: error });
         }
-        const todo = {
-            id: todos.length + 1,
-            title,
-            description,
-            done
-        }
-        todos.push(todo);
+        const todo = await prisma.todo.create({
+            data: createTodoDto!.toObject()
+        })
         return res.json(todo);
     }
 
-    public updateTodo(req: Request, res: Response) {
-        const id = parseInt(req.params.id);
-        const todo = todos.find(todo => todo.id === id);
+    public async updateTodo(req: Request, res: Response) {
+        const [idError, getTodoByIdDto] = GetTodoByIdDto.create({ id: req.params.id });
+        if (idError) {
+            return res.status(400).json({ message: idError });
+        }
+        
+        const [error, updateTodoDto] = UpdateTodoDto.create({ title: req.body.title, completedAt: req.body.completedAt });
+        if (error) {
+            return res.status(400).json({ message: error });
+        }
+        
+        const todo = await prisma.todo.findUnique({
+            where: {
+                id: getTodoByIdDto!.getId()
+            }
+        })
         if (!todo) {
             return res.status(404).json({ message: "Todo not found" });
         }
-        const { title, description, done } = req.body;
-        if (!title || !description || !done) {
-            return res.status(400).json({ message: "Missing required fields" });
-        }
-        todo.title = title;
-        todo.description = description;
-        todo.done = done;
-        return res.json(todo);
+        const updatedTodo = await prisma.todo.update({
+            where: {
+                id: getTodoByIdDto!.getId()
+            },
+            data: updateTodoDto!.toObject()
+        })
+        return res.json(updatedTodo);
     }
 
-    public deleteTodo(req: Request, res: Response) {
-        const id = parseInt(req.params.id);
-        const todo = todos.find(todo => todo.id === id);
+    public async deleteTodo(req: Request, res: Response) {
+        const [error, deleteTodoDto] = DeleteTodoDto.create({ id: req.params.id });
+        
+        if (error) {
+            return res.status(400).json({ message: error });
+        }
+        
+        const todo = await prisma.todo.findUnique({
+            where: {
+                id: deleteTodoDto!.getId()
+            }
+        })
         if (!todo) {
             return res.status(404).json({ message: "Todo not found" });
         }
-        todos.splice(todos.indexOf(todo), 1);
-        return res.json(todo);
+        const deletedTodo = await prisma.todo.delete({
+            where: {
+                id: deleteTodoDto!.getId()
+            }
+        })
+        return res.json(deletedTodo);
     }
 }
